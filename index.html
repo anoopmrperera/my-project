@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="description" content="Records the rhythm of handwriting (bursts and pauses) using the phone's microphone or motion sensors. Everything stays on your device.">
+  <title>Writing Rhythm Recorder</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Writing Rhythm Recorder</h1>
+    <p class="tagline">Captures the rhythm of your pen, never the words.</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" role="tab" data-tab="record">Record</button>
+    <button class="tab" role="tab" data-tab="sessions">Sessions <span id="session-count" class="count"></span></button>
+    <button class="tab" role="tab" data-tab="compare">Compare</button>
+  </nav>
+
+  <main>
+    <!-- ============ RECORD ============ -->
+    <section id="tab-record" class="panel active">
+      <div class="card">
+        <div class="mode-switch" role="radiogroup" aria-label="Sensor">
+          <label class="mode">
+            <input type="radio" name="mode" value="mic" checked>
+            <span><strong>Microphone</strong><small>Phone lies on the desk next to the paper</small></span>
+          </label>
+          <label class="mode">
+            <input type="radio" name="mode" value="motion">
+            <span><strong>Motion</strong><small>Phone strapped to your writing wrist</small></span>
+          </label>
+        </div>
+
+        <div class="status-row">
+          <span id="status" class="status idle">Ready</span>
+          <span id="timer" class="timer">0:00</span>
+        </div>
+
+        <canvas id="live-chart" class="chart chart-live" aria-label="Live writing timeline"></canvas>
+        <div class="legend"><span class="sw sw-level"></span>pen sound <span class="sw sw-burst"></span>writing burst <span class="sw sw-pause"></span>pause <span class="sw sw-thresh"></span>threshold</div>
+
+        <div class="live-stats">
+          <div><b id="live-writing">0 s</b><small>writing</small></div>
+          <div><b id="live-pauses">0</b><small>pauses</small></div>
+          <div><b id="live-current">–</b><small>right now</small></div>
+        </div>
+
+        <button id="start-btn" class="big-btn">Start</button>
+        <p id="hint" class="hint">Place the phone screen-up on the desk, about a hand's width from your paper. Tap Start, stay quiet for 2 seconds, then write.</p>
+        <p id="error" class="error" hidden></p>
+      </div>
+
+      <div id="result" class="card" hidden>
+        <h2>Session summary</h2>
+        <div id="result-summary"></div>
+        <canvas id="result-chart" class="chart chart-full" aria-label="Full session timeline"></canvas>
+        <form id="save-form" class="save-form">
+          <label class="field">Name
+            <input id="save-name" type="text" maxlength="60" autocomplete="off">
+          </label>
+          <fieldset class="field">
+            <legend>What kind of writing was this?</legend>
+            <div class="chips">
+              <label><input type="radio" name="kind" value="copied"><span>Copied</span></label>
+              <label><input type="radio" name="kind" value="composed"><span>Composed</span></label>
+              <label><input type="radio" name="kind" value="other" checked><span>Other</span></label>
+            </div>
+          </fieldset>
+          <label class="field">Note (optional)
+            <textarea id="save-note" rows="2" maxlength="300" placeholder="e.g. copied a paragraph from a novel, blue ballpoint"></textarea>
+          </label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary">Save session</button>
+            <button type="button" id="discard-btn" class="btn">Discard</button>
+          </div>
+        </form>
+      </div>
+
+      <details class="card settings">
+        <summary>Settings</summary>
+        <label class="field">Sensitivity <output id="sens-out"></output>
+          <input id="sensitivity" type="range" min="1" max="10" step="1">
+          <small>Raise it if your writing is not picked up; lower it if background noise counts as writing. Watch the live chart: the line should rise above the dashed threshold only while the pen moves.</small>
+        </label>
+        <label class="field">A pause is any break longer than
+          <select id="pause-threshold">
+            <option value="500">0.5 seconds</option>
+            <option value="1000">1 second</option>
+            <option value="1500">1.5 seconds</option>
+            <option value="2000">2 seconds</option>
+            <option value="3000">3 seconds</option>
+          </select>
+          <small>Shorter breaks (between letters and words) count as part of a writing burst. Applies to all saved sessions, so comparisons stay fair.</small>
+        </label>
+      </details>
+
+      <details class="card help">
+        <summary>How it works &amp; tips</summary>
+        <p><strong>Microphone mode</strong> listens only for the scratchy, high-pitched sound of a pen moving on paper. It measures how loud that sound is, many times a second, and marks each moment as <em>writing</em> or <em>quiet</em>. No audio is recorded or kept.</p>
+        <p><strong>Motion mode</strong> uses the phone's movement sensors. Strap the phone firmly to the forearm of your writing hand (a sports armband works). Small hand movements while writing are counted as writing.</p>
+        <ul>
+          <li>Work in a quiet room. Talking, music and typing will be picked up.</li>
+          <li>A pencil or ballpoint on paper over a hard table gives the clearest sound.</li>
+          <li>Keep the screen on and the app open while recording.</li>
+          <li>Breaks between letters and words are part of a <em>burst</em>. A <em>pause</em> is a longer break (1 second by default, see Settings).</li>
+          <li><strong>Steadiness</strong> (0–100) shows how evenly sized your bursts and pauses were. High means a regular, even rhythm; low means a stop-and-go rhythm with very uneven pauses.</li>
+        </ul>
+        <p class="privacy">🔒 Everything stays on this phone. Nothing is uploaded, and there is no account.</p>
+      </details>
+    </section>
+
+    <!-- ============ SESSIONS ============ -->
+    <section id="tab-sessions" class="panel">
+      <div id="sessions-list-view">
+        <div id="sessions-list"></div>
+        <div class="card tools">
+          <h3>Backup</h3>
+          <p class="muted">Sessions are stored in this browser only. You can save a backup file to the phone, or move sessions to another device.</p>
+          <div class="btn-row">
+            <button id="export-all" class="btn">Save backup file</button>
+            <label class="btn">Load backup file<input id="import-file" type="file" accept="application/json,.json" hidden></label>
+          </div>
+        </div>
+      </div>
+      <div id="session-detail" hidden></div>
+    </section>
+
+    <!-- ============ COMPARE ============ -->
+    <section id="tab-compare" class="panel">
+      <div id="compare-empty" class="card empty">
+        <p>Save at least two sessions to compare them.</p>
+        <p class="muted">Try this: copy a paragraph from a book in one session, then write a paragraph of your own in another.</p>
+      </div>
+      <div id="compare-view" hidden>
+        <div class="card compare-pick">
+          <label class="field"><span class="tag tag-a">A</span><select id="cmp-a"></select></label>
+          <label class="field"><span class="tag tag-b">B</span><select id="cmp-b"></select></label>
+        </div>
+        <div class="card">
+          <h3>What stands out</h3>
+          <ul id="cmp-notes" class="notes"></ul>
+          <p class="muted small">An early prototype: one pair of sessions is a hint, not proof.</p>
+        </div>
+        <div class="card">
+          <h3>Rhythm side by side</h3>
+          <p class="muted small">Coloured blocks are writing bursts, grey gaps are pauses. Both use the same time scale, starting at the first pen stroke.</p>
+          <div class="strip-label"><span class="tag tag-a">A</span><span id="strip-a-name"></span></div>
+          <canvas id="strip-a" class="chart chart-strip"></canvas>
+          <div class="strip-label"><span class="tag tag-b">B</span><span id="strip-b-name"></span></div>
+          <canvas id="strip-b" class="chart chart-strip"></canvas>
+        </div>
+        <div class="card">
+          <h3>Numbers</h3>
+          <table class="cmp-table" id="cmp-table"></table>
+        </div>
+        <div class="card">
+          <h3>How long were the pauses?</h3>
+          <div id="cmp-hist"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">🔒 All recordings stay on this device.</footer>
+
+  <script src="js/storage.js"></script>
+  <script src="js/analysis.js"></script>
+  <script src="js/detector.js"></script>
+  <script src="js/sensors.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
